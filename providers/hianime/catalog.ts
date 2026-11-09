@@ -1,0 +1,30 @@
+export const catalog = [
+  { title: "Trending", filter: "trending" },
+  { title: "Most Popular", filter: "most-popular" },
+  { title: "Top Airing", filter: "top-airing" },
+  { title: "Recently Updated", filter: "recently-updated" },
+  { title: "Most Favorite", filter: "most-favorite" },
+  { title: "Top Upcoming", filter: "top-upcoming" },
+  { title: "Movies", filter: "movie" },
+];
+
+export const genres = [
+  { title: "Action", filter: "genre:action" },
+  { title: "Adventure", filter: "genre:adventure" },
+  { title: "Comedy", filter: "genre:comedy" },
+  { title: "Drama", filter: "genre:drama" },
+  { title: "Fantasy", filter: "genre:fantasy" },
+  { title: "Horror", filter: "genre:horror" },
+  { title: "Mecha", filter: "genre:mecha" },
+  { title: "Mystery", filter: "genre:mystery" },
+  { title: "Psychological", filter: "genre:psychological" },
+  { title: "Romance", filter: "genre:romance" },
+  { title: "School", filter: "genre:school" },
+  { title: "Sci-Fi", filter: "genre:sci-fi" },
+  { title: "Slice of Life", filter: "genre:slice-of-life" },
+  { title: "Sports", filter: "genre:sports" },
+  { title: "Supernatural", filter: "genre:supernatural" },
+  { title: "Thriller", filter: "genre:thriller" },
+  { title: "Isekai", filter: "genre:isekai" },
+  { title: "Shounen", filter: "genre:shounen" },
+];

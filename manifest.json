@@ -1,0 +1,18 @@
+[
+  {
+    "display_name": "DesiDubAnime",
+    "value": "desidubanime",
+    "version": "1.0.0",
+    "icon": "",
+    "type": "global",
+    "disabled": false
+  },
+  {
+    "display_name": "HiAnime",
+    "value": "hianime",
+    "version": "1.0.0",
+    "icon": "",
+    "type": "global",
+    "disabled": false
+  }
+]
