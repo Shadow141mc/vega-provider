@@ -12,8 +12,10 @@ export const USER_AGENT =
  * Vidrift's edge challenges full browser user agents that arrive without
  * client-hint headers (403) but serves plain `Mozilla/5.0` — verified by
  * interleaved requests against /api/boot.
+ * Using a realistic Chrome UA with Sec-CH-UA headers helps bypass regional blocks.
  */
-export const VIDRIFT_USER_AGENT = "Mozilla/5.0";
+export const VIDRIFT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36";
 
 /** The stream resolver lives on Vidrift's embed origin, not on the site. */
 export const VIDRIFT_BASE = "https://embed.vidrift.net";
@@ -57,6 +59,9 @@ export function embedHeaders(
     "User-Agent": VIDRIFT_USER_AGENT,
     Accept: "*/*",
     "Accept-Language": "en-US,en;q=0.9",
+    "Sec-CH-UA": '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    "Sec-CH-UA-Mobile": "?0",
+    "Sec-CH-UA-Platform": '"Windows"',
     Referer: `${VIDRIFT_BASE}/`,
     ...extra,
   };
@@ -81,6 +86,7 @@ export function guessStreamType(url: string): string {
 /**
  * Read the highest RESOLUTION of an HLS master playlist so the app can show
  * a quality badge. Failures degrade to an empty string.
+ * Includes retry logic for slow connections or transient network issues.
  */
 export async function detectQuality(
   providerContext: ProviderContext,
@@ -90,25 +96,31 @@ export async function detectQuality(
 ): Promise<string> {
   if (guessStreamType(source) !== "m3u8") return "";
 
-  try {
-    const response = await providerContext.axios.get(source, {
-      headers,
-      signal,
-    });
-    const text = String(response.data || "");
-    const pattern = /RESOLUTION=\d+x(\d+)/gi;
-    let match: RegExpExecArray | null;
-    let height = 0;
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await providerContext.axios.get(source, {
+        headers,
+        signal,
+        timeout: 10000,
+      });
+      const text = String(response.data || "");
+      const pattern = /RESOLUTION=\d+x(\d+)/gi;
+      let match: RegExpExecArray | null;
+      let height = 0;
 
-    while ((match = pattern.exec(text))) {
-      const value = Number(match[1]);
-      if (value > height) height = value;
+      while ((match = pattern.exec(text))) {
+        const value = Number(match[1]);
+        if (value > height) height = value;
+      }
+
+      return height ? `${height}p` : "";
+    } catch {
+      if (attempt === maxRetries) return "";
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
     }
-
-    return height ? `${height}p` : "";
-  } catch {
-    return "";
   }
+  return "";
 }
 
 /** Map a subtitle label/lang to a 2-letter language code for the player. */

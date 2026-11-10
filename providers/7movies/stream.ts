@@ -10,6 +10,31 @@ import {
   VIDRIFT_BASE,
 } from "./utils";
 
+const MAX_RETRIES = 3;
+const BASE_RETRY_DELAY = 500;
+
+async function fetchWithRetry<T>(
+  fn: () => Promise<T>,
+  retries = MAX_RETRIES,
+  delay = BASE_RETRY_DELAY,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (error: any) {
+    if (retries <= 0) throw error;
+    const isRetryable =
+      !error?.response ||
+      error?.response?.status === 429 ||
+      error?.response?.status >= 500 ||
+      error?.code === "ECONNABORTED" ||
+      error?.code === "ETIMEDOUT" ||
+      error?.code === "ENOTFOUND";
+    if (!isRetryable) throw error;
+    await new Promise(r => setTimeout(r, delay));
+    return fetchWithRetry(fn, retries - 1, delay * 2);
+  }
+}
+
 interface ParsedLink {
   kind: "movie" | "tv";
   id: string;
@@ -140,14 +165,24 @@ export const getStream = async function ({
   const path = mediaPath(parsed);
 
   // ── Boot: mints the playback token and ships the direct manifests ────────
-  const bootResponse = await axios.get(
-    `${VIDRIFT_BASE}/api/boot/${path}`,
-    { headers: embedHeaders({ Referer: `${baseUrl}/` }), signal },
-  );
-  const bootMeta: BootMeta = bootResponse?.data?.meta || {};
-  const token = String(bootMeta.playbackToken || "");
+  let bootMeta: BootMeta;
+  let token: string;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    const bootResponse = await fetchWithRetry(() =>
+      axios.get(`${VIDRIFT_BASE}/api/boot/${path}`, {
+        headers: embedHeaders({ Referer: `${baseUrl}/` }),
+        signal,
+      }),
+    );
+    bootMeta = bootResponse?.data?.meta || {};
+    token = String(bootMeta.playbackToken || "");
+    if (token) break;
+    if (attempt < MAX_RETRIES - 1) {
+      await new Promise(r => setTimeout(r, BASE_RETRY_DELAY * (attempt + 1)));
+    }
+  }
   if (!token) {
-    throw new Error("7Movies: Vidrift did not return a playback token.");
+    throw new Error("7Movies: Vidrift did not return a playback token after retries.");
   }
 
   const candidates: Candidate[] = [];
@@ -194,19 +229,22 @@ export const getStream = async function ({
   }
 
   // ── Source API: proxy lanes for the same token ─────────────────────────
-  // The default call cascades through the site's provider order; an explicit
-  // Atlas call covers titles where the cascade picks a different host.
-  // (The Titan lane serves a jpg-frame decoy playlist — not added.)
+  // The default call cascades through the site's provider order; explicit
+  // lane calls cover titles where the cascade picks a different host.
+  // Multiple lanes provide redundancy if one is down or returns decoys.
+  const laneNames = ["", "atlas", "photon", "nova"] as const;
   const laneResults = await Promise.all(
-    ["", "atlas"].map(async lane => {
+    laneNames.map(async lane => {
       try {
         const query =
           `token=${encodeURIComponent(token)}` +
           `&provider=${encodeURIComponent(lane)}` +
           `&parent=${encodeURIComponent(`${baseUrl}/`)}`;
-        const response = await axios.get(
-          `${VIDRIFT_BASE}/api/source/${path}?${query}`,
-          { headers: embedHeaders(), signal },
+        const response = await fetchWithRetry(() =>
+          axios.get(`${VIDRIFT_BASE}/api/source/${path}?${query}`, {
+            headers: embedHeaders(),
+            signal,
+          }),
         );
         return response?.data || null;
       } catch {
