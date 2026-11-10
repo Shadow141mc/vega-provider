@@ -311,38 +311,20 @@ export const getStream = async function ({
         (await detectQuality(
           providerContext,
           candidate.link,
-          { "User-Agent": VIDRIFT_USER_AGENT },
+          embedHeaders(),
           signal,
         )) || undefined;
     }),
   );
 
-  const streams: Stream[] = unique.map(candidate => {
-    const streamUrl = new URL(candidate.link);
-    const streamOrigin = streamUrl.origin;
-    const isVidrift = streamOrigin === VIDRIFT_BASE;
-
-    // Use Vidrift referer only for Vidrift-hosted streams.
-    // For other CDNs, use the site origin or no referer to avoid 403s.
-    const headers = isVidrift
-      ? {
-          "User-Agent": VIDRIFT_USER_AGENT,
-          Referer: `${VIDRIFT_BASE}/`,
-        }
-      : {
-          "User-Agent": VIDRIFT_USER_AGENT,
-          Referer: `${baseUrl}/`,
-        };
-
-    return {
-      server: candidate.server,
-      link: candidate.link,
-      type: candidate.type,
-      quality: candidate.quality,
-      subtitles: subtitles.length ? subtitles : undefined,
-      headers,
-    };
-  });
+  const streams: Stream[] = unique.map(candidate => ({
+    server: candidate.server,
+    link: candidate.link,
+    type: candidate.type,
+    quality: candidate.quality,
+    subtitles: subtitles.length ? subtitles : undefined,
+    headers: embedHeaders(),
+  }));
 
   // Original audio always leads — Orion ships language dubs as
   // "Orion · Hindi", and those must not outrank the main track even for
