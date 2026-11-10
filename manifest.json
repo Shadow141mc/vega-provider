@@ -14,5 +14,13 @@
     "icon": "",
     "type": "global",
     "disabled": false
+  },
+  {
+    "display_name": "7Movies",
+    "value": "7movies",
+    "version": "1.0.0",
+    "icon": "",
+    "type": "global",
+    "disabled": false
   }
 ]
