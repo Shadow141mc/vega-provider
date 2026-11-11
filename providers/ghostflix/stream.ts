@@ -1,17 +1,30 @@
-import { ProviderContext, Stream } from "../types";
-import {
-  detectQuality,
-  getBaseUrl,
-  guessStreamType,
-  siteHeaders,
-} from "./utils";
+import { ProviderContext, Stream, TextTracks } from "../types";
 import { throwProviderError } from "../providerErrors";
+
+const VIDBOLT_BASE = "https://vidbolt.pro";
 
 interface ParsedLink {
   kind: "movie" | "tv";
   id: string;
   season?: string;
   episode?: string;
+}
+
+interface VidBoltSource {
+  url?: string;
+  kind?: string;
+  quality?: string;
+  language?: string;
+}
+
+interface VidBoltStream {
+  server?: string;
+  sources?: VidBoltSource[];
+  thumbnails?: string;
+}
+
+interface VidBoltResponse {
+  stream?: VidBoltStream;
 }
 
 function parseStreamLink(link: string): ParsedLink | null {
@@ -32,14 +45,6 @@ function parseStreamLink(link: string): ParsedLink | null {
   return null;
 }
 
-function resolveUrl(baseUrl: string, src: string): string {
-  try {
-    return new URL(src, baseUrl).href;
-  } catch {
-    return src;
-  }
-}
-
 export const getStream = async function ({
   link,
   type,
@@ -54,8 +59,7 @@ export const getStream = async function ({
   isDownload?: boolean;
 }): Promise<Stream[]> {
   void type;
-  const { axios, cheerio, commonHeaders } = providerContext;
-  const baseUrl = await getBaseUrl(providerContext);
+  const { axios, commonHeaders } = providerContext;
 
   const parsed = parseStreamLink(link);
   if (!parsed) {
@@ -66,96 +70,74 @@ export const getStream = async function ({
     );
   }
 
-  // Watch page URL patterns to try, in order.
-  const watchUrls: string[] = [];
-  if (parsed.kind === "movie") {
-    watchUrls.push(
-      `${baseUrl}/watch/movie/${parsed.id}`,
-      `${baseUrl}/play/movie/${parsed.id}`,
-      `${baseUrl}/player/movie/${parsed.id}`,
-    );
-  } else {
-    watchUrls.push(
-      `${baseUrl}/watch/tv/${parsed.id}/${parsed.season}/${parsed.episode}`,
-    );
+  const params: Record<string, string> = {
+    type: parsed.kind,
+    id: parsed.id,
+  };
+  if (parsed.kind === "tv" && parsed.season && parsed.episode) {
+    params.season = parsed.season;
+    params.episode = parsed.episode;
   }
 
-  const streams: Stream[] = [];
+  const response = await axios.get<VidBoltResponse>(
+    `${VIDBOLT_BASE}/api/resolve`,
+    {
+      params,
+      headers: {
+        ...commonHeaders,
+        Accept: "application/json",
+      },
+      signal,
+      timeout: 15000,
+    },
+  );
+
+  const data = response?.data || {};
+  const stream = data.stream;
+  const sources: VidBoltSource[] = Array.isArray(stream?.sources)
+    ? stream.sources
+    : [];
+  const thumbnails = String(stream?.thumbnails || "").trim() || undefined;
+
+  const subtitles: TextTracks = thumbnails
+    ? [
+        {
+          title: "English",
+          language: "en",
+          type: "text/vtt",
+          uri: thumbnails,
+        },
+      ]
+    : [];
+
+  const candidates: Stream[] = [];
   const seen = new Set<string>();
 
-  for (const watchUrl of watchUrls) {
-    try {
-      const response = await axios.get(watchUrl, {
-        headers: siteHeaders(baseUrl, commonHeaders),
-        signal,
-        timeout: 15000,
-      });
-      const html = String(response.data || "");
-      const $ = cheerio.load(html);
+  for (const source of sources) {
+    const url = String(source?.url || "").trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
 
-      const candidates = new Set<string>();
-
-      $("source[src]").each((_, el) => {
-        const src = $(el).attr("src");
-        if (src) candidates.add(src);
-      });
-      $("video[src]").each((_, el) => {
-        const src = $(el).attr("src");
-        if (src) candidates.add(src);
-      });
-      $("a[href]").each((_, el) => {
-        const href = $(el).attr("href");
-        if (href && /\.(m3u8|mp4)(\?|$)/i.test(href)) candidates.add(href);
-      });
-
-      const regexMatches =
-        html.match(/https?:\/\/[^"'<>\s]+\.(?:m3u8|mp4)[^"'<>\s]*/gi) || [];
-      for (const u of regexMatches) candidates.add(u);
-
-      for (const src of candidates) {
-        if (!src || seen.has(src)) continue;
-        seen.add(src);
-        const absolute = resolveUrl(baseUrl, src);
-        const streamType = guessStreamType(absolute);
-        streams.push({
-          server: "Ghostflix",
-          link: absolute,
-          type: streamType,
-          quality: "",
-        });
-      }
-    } catch {
-      // Try the next watch URL pattern.
-    }
+    candidates.push({
+      server: String(stream?.server || "VidBolt").trim() || "VidBolt",
+      link: url,
+      type: "m3u8",
+      quality: String(source?.quality || "").trim() || undefined,
+      subtitles: subtitles.length ? subtitles : undefined,
+      headers: commonHeaders,
+    });
   }
 
-  // Detect quality for HLS streams by reading the master playlist.
-  for (const stream of streams) {
-    if (stream.type !== "m3u8") continue;
-    try {
-      stream.quality =
-        (await detectQuality(
-          providerContext,
-          stream.link,
-          siteHeaders(baseUrl, commonHeaders),
-          signal,
-        )) || undefined;
-    } catch {
-      // Keep quality unset on failure.
-    }
-  }
-
-  if (!streams.length) {
+  if (!candidates.length) {
     throwProviderError(
       "Ghostflix",
       "getStream",
-      new Error("no playable streams found on watch page."),
+      new Error("no sources returned by VidBolt resolver."),
     );
   }
 
-  // Sort: downloads prefer MP4, streaming prefers HLS; higher quality leads.
   const height = (s: Stream) => parseInt(String(s.quality || ""), 10) || 0;
-  streams.sort((a, b) => {
+  candidates.sort((a, b) => {
     const aMp4 = a.type === "mp4";
     const bMp4 = b.type === "mp4";
     if (aMp4 !== bMp4) {
@@ -164,5 +146,5 @@ export const getStream = async function ({
     return height(b) - height(a);
   });
 
-  return streams;
+  return candidates;
 };
