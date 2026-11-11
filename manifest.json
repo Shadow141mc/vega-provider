@@ -22,5 +22,21 @@
     "icon": "",
     "type": "global",
     "disabled": false
+  },
+  {
+    "display_name": "Flixer",
+    "value": "flixer",
+    "version": "1.0.0",
+    "icon": "",
+    "type": "global",
+    "disabled": false
+  },
+  {
+    "display_name": "Ghostflix",
+    "value": "ghostflix",
+    "version": "1.0.0",
+    "icon": "",
+    "type": "global",
+    "disabled": false
   }
 ]

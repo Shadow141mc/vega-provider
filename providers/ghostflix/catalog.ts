@@ -1,0 +1,41 @@
+export const catalog = [
+  { title: "Trending Movies", filter: "trending/movie/week" },
+  { title: "Popular Movies", filter: "movie/popular" },
+  { title: "Top Rated Movies", filter: "movie/top_rated" },
+  { title: "Popular TV Shows", filter: "tv/popular" },
+  { title: "Top Rated TV Shows", filter: "tv/top_rated" },
+  { title: "Now Playing Movies", filter: "movie/now_playing" },
+];
+
+export const genres = [
+  // Movies (TMDB genre ids)
+  { title: "Action", filter: "discover/movie?with_genres=28" },
+  { title: "Adventure", filter: "discover/movie?with_genres=12" },
+  { title: "Animation", filter: "discover/movie?with_genres=16" },
+  { title: "Comedy", filter: "discover/movie?with_genres=35" },
+  { title: "Crime", filter: "discover/movie?with_genres=80" },
+  { title: "Documentary", filter: "discover/movie?with_genres=99" },
+  { title: "Drama", filter: "discover/movie?with_genres=18" },
+  { title: "Family", filter: "discover/movie?with_genres=10751" },
+  { title: "Fantasy", filter: "discover/movie?with_genres=14" },
+  { title: "Horror", filter: "discover/movie?with_genres=27" },
+  { title: "Mystery", filter: "discover/movie?with_genres=9648" },
+  { title: "Romance", filter: "discover/movie?with_genres=10749" },
+  { title: "Sci-Fi", filter: "discover/movie?with_genres=878" },
+  { title: "Thriller", filter: "discover/movie?with_genres=53" },
+  { title: "War", filter: "discover/movie?with_genres=10752" },
+  { title: "Western", filter: "discover/movie?with_genres=37" },
+  // TV shows (TMDB TV genre ids)
+  { title: "TV Action & Adventure", filter: "discover/tv?with_genres=10759" },
+  { title: "TV Comedy", filter: "discover/tv?with_genres=35" },
+  { title: "TV Crime", filter: "discover/tv?with_genres=80" },
+  { title: "TV Drama", filter: "discover/tv?with_genres=18" },
+  { title: "TV Kids", filter: "discover/tv?with_genres=10762" },
+  { title: "TV Mystery", filter: "discover/tv?with_genres=9648" },
+  { title: "TV Sci-Fi & Fantasy", filter: "discover/tv?with_genres=10765" },
+  { title: "TV Reality", filter: "discover/tv?with_genres=10764" },
+  { title: "TV Soap", filter: "discover/tv?with_genres=10766" },
+  { title: "TV Talk", filter: "discover/tv?with_genres=10767" },
+  { title: "TV War & Politics", filter: "discover/tv?with_genres=10768" },
+  { title: "TV Western", filter: "discover/tv?with_genres=37" },
+];
