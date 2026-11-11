@@ -11,8 +11,8 @@ Sites checked for usable scraping APIs (catalog/posts/meta/stream). Ranked by ea
 - **Structure:** Full TMDB v3 clone — `{page, results[], total_pages, total_results}` with standard TMDB fields (`id`, `title`/`name`, `overview`, `poster_path`, `backdrop_path`, `genre_ids`, `vote_average`, `release_date`/`first_air_date`, `media_type`)
 - **imdbId:** Available on `/movie/{id}` and `/tv/{id}` detail responses — good for Cinemeta enrichment
 - **Endpoints verified:** `/trending/movie/week`, `/movie/popular`, `/tv/popular`, `/search/movie`, `/search/tv`, `/genre/movie/list`, `/discover/movie?with_genres=X`, `/movie/{id}`, `/tv/{id}`
-- **Gap:** `stream.ts` — video source resolution happens client-side in the `VideoPlayer` chunk / watch embed pages; no direct server stream endpoint confirmed. Would need embed-page scraping for m3u8/mp4.
-- **Verdict:** **Highly suitable.** Catalog/meta/search fully scrape-ready. Stream requires additional player-page scraping.
+- **Gap:** `stream.ts` — stream resolution requires WASM-derived HMAC crypto + AES decryption on `https://plsdontscrapemelove.flixer.su/api/tmdb/movie/{tmdbId}/images` — NOT possible in Vega sandbox (no WASM/WebAssembly, no third-party libs). flixer stream.ts cannot resolve playable URLs in Vega.
+- **Verdict:** **Catalog/meta/search work; stream is NOT possible in Vega sandbox** due to WASM crypto requirement. Build as catalog/meta-only provider or skip for full end-to-end.
 
 ## Rank 2 — movy.sx
 
@@ -32,8 +32,9 @@ Sites checked for usable scraping APIs (catalog/posts/meta/stream). Ranked by ea
 - **Working base URL:** `https://ghostflix.st/api/tmdb` — TMDB-compatible proxy, no auth
 - **imdbId:** Available on `/api/tmdb/movie/{id}` details
 - **Verified endpoints:** `/api/tmdb/movie/popular`, `/api/tmdb/tv/popular`, `/api/tmdb/movie/{id}`, `/api/tmdb/tv/{id}`, `/api/tmdb/search/movie`, `/api/tmdb/search/tv`
-- **Gap:** Stream sources live on third-party backends (atlantic.st embed pages `/embed/movie/{tmdbId}`, `/embed/tv/{tmdbId}/{season}/{episode}`, hls.lol / vdrk.site variants). `stream.ts` would need player-page scraping.
-- **Verdict:** **Highly suitable** for catalog/meta; stream requires embed-page scraping.
+- **Stream API:** `https://vidbolt.pro/api/resolve?type=movie&id={tmdbId}&season={N}&episode={N}` — NO auth required, returns m3u8 sources + VTT subtitles
+- **Gap:** None — stream resolution works directly via vidbolt.pro API.
+- **Verdict:** **Fully working** including stream resolution.
 
 ## Rank 4 — hexa.su
 
@@ -57,8 +58,17 @@ Sites checked for usable scraping APIs (catalog/posts/meta/stream). Ranked by ea
 | rivestream.app | Auth-gated backend (Firebase); no public scraping API; all gateway paths 404 |
 | watch.corsflix.net | Unreachable (connection timeout); DNS resolves but no TCP connectivity |
 
+
+## Stream Resolution Summary
+
+| Site | Stream API | Auth | Vega-compatible? | Status |
+|------|------------|------|------------------|--------|
+| flixer.gd | plsdontscrapemelove.flixer.su/api/tmdb/{media}/{id}/images | WASM HMAC + AES | NO | Stream blocked |
+| ghostflix.st | vidbolt.pro/api/resolve?type=...&id=... | None | YES | Working |
+
+
 ## Recommendation
 
-Build the **flixer.gd** provider first (Rank 1). It has a working, unauthenticated TMDB-compatible API via `https://plsdontscrapemelove.flixer.su/api/tmdb` covering catalog/posts/meta with `imdbId` support. The only remaining work is `stream.ts` which will require scraping the watch/embed pages for m3u8/mp4 URLs — a well-understood pattern used by other providers in this repo (e.g., 7movies/vidrift, hianime/zoko).
+Build the **ghostflix.st** provider first (Rank 3). It is fully working end-to-end: catalog/posts/meta via `https://ghostflix.st/api/tmdb` (no auth) plus stream resolution via `https://vidbolt.pro/api/resolve?type=...&id=...` (no auth required, returns m3u8 sources + VTT subtitles).
 
-If flixer.gd's stream resolution proves too difficult, fall back to **movy.sx** (Rank 2) for catalog/meta and tackle its stream API signing, or **ghostflix.st** (Rank 3).
+**flixer.gd** (Rank 1) is catalog/meta only: its stream requires WASM-derived HMAC + AES crypto that cannot run in the Vega sandbox. **movy.sx** (Rank 2) remains a fallback for catalog/meta if its stream signing is reverse-engineered.

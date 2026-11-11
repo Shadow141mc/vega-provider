@@ -1,7 +1,12 @@
 import { ProviderContext, Stream, TextTracks } from "../types";
 import { throwProviderError } from "../providerErrors";
+import {
+  detectQuality,
+  guessStreamType,
+} from "./utils";
 
 const VIDBOLT_BASE = "https://vidbolt.pro";
+const VIDBOLT_REFERER = "https://vidbolt.pro/";
 
 interface ParsedLink {
   kind: "movie" | "tv";
@@ -25,6 +30,19 @@ interface VidBoltStream {
 
 interface VidBoltResponse {
   stream?: VidBoltStream;
+}
+
+/** Headers used for both the resolve API and stream playback. */
+function vidboltHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  return {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+    Accept: "*/*",
+    "Accept-Language": "en-US,en;q=0.9",
+    Referer: VIDBOLT_REFERER,
+    Origin: VIDBOLT_BASE,
+    ...extra,
+  };
 }
 
 function parseStreamLink(link: string): ParsedLink | null {
@@ -59,7 +77,7 @@ export const getStream = async function ({
   isDownload?: boolean;
 }): Promise<Stream[]> {
   void type;
-  const { axios, commonHeaders } = providerContext;
+  const { axios } = providerContext;
 
   const parsed = parseStreamLink(link);
   if (!parsed) {
@@ -83,10 +101,7 @@ export const getStream = async function ({
     `${VIDBOLT_BASE}/api/resolve`,
     {
       params,
-      headers: {
-        ...commonHeaders,
-        Accept: "application/json",
-      },
+      headers: vidboltHeaders({ Accept: "application/json" }),
       signal,
       timeout: 15000,
     },
@@ -121,10 +136,10 @@ export const getStream = async function ({
     candidates.push({
       server: String(stream?.server || "VidBolt").trim() || "VidBolt",
       link: url,
-      type: "m3u8",
+      type: guessStreamType(url),
       quality: String(source?.quality || "").trim() || undefined,
       subtitles: subtitles.length ? subtitles : undefined,
-      headers: commonHeaders,
+      headers: vidboltHeaders(),
     });
   }
 
@@ -135,6 +150,20 @@ export const getStream = async function ({
       new Error("no sources returned by VidBolt resolver."),
     );
   }
+
+  // Detect actual m3u8 quality by reading the master playlist RESOLUTION tags.
+  await Promise.all(
+    candidates.map(async candidate => {
+      if (candidate.quality || candidate.type !== "m3u8") return;
+      candidate.quality =
+        (await detectQuality(
+          providerContext,
+          candidate.link,
+          vidboltHeaders(),
+          signal,
+        )) || undefined;
+    }),
+  );
 
   const height = (s: Stream) => parseInt(String(s.quality || ""), 10) || 0;
   candidates.sort((a, b) => {
